@@ -125,7 +125,7 @@ const ChatContainer = ({ selectedUser, setSelectedUser }) => {
       </div>
     </div>
   ) : (
-    <div className="flex flex-col items-center justify-center gap-2 text-gray-500 bg-white/10 max-md:hidden">
+    <div className="flex flex-col items-center justify-center gap-2 flex-1 min-w-0 min-h-full bg-white/5 backdrop-blur-lg">
       <img src={assets.logo_icon} alt="" className="max-w-16" />
       <p className="text-lg font-medium text-white">Chat anytime, anywhere</p>
     </div>
