@@ -3,37 +3,44 @@ import Message from "../models/message.model.js";
 import User from "../models/user.model.js";
 import { io, userSocketMap } from "../server.js";
 
+/* ================= GET USERS FOR SIDEBAR ================= */
 export const getUsersForSidebar = async (req, res) => {
   try {
-    const userId = req.user._id;
-    const filteredUser = await User.find({ _id: { $ne: userId } }).select(
-      "-password"
-    );
+    const myId = req.user._id;
+
+    const users = await User.find({ _id: { $ne: myId } }).select("-password");
 
     const unseenMessages = {};
-    const promises = filteredUser.map(async (user) => {
-      const messages = await Message.find({
-        senderId: user._id,
-        recieverId: userId,
-        seen: false,
-      });
 
-      if (messages.length > 0) {
-        unseenMessages[user._id] = messages.length;
-      }
+    await Promise.all(
+      users.map(async (user) => {
+        const count = await Message.countDocuments({
+          senderId: user._id,
+          recieverId: myId,
+          seen: false,
+        });
 
-      Promise.all(promises);
-      return res.json({ success: true, users: filteredUser });
+        if (count > 0) {
+          unseenMessages[user._id] = count;
+        }
+      })
+    );
+
+    return res.status(200).json({
+      success: true,
+      users,
+      unseenMessages,
     });
   } catch (error) {
-    console.log(error.message);
-    return res.json({
+    console.error(error.message);
+    return res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Failed to fetch users",
     });
   }
 };
 
+/* ================= GET MESSAGES ================= */
 export const getMessages = async (req, res) => {
   try {
     const { id: selectedUser } = req.params;
@@ -44,70 +51,85 @@ export const getMessages = async (req, res) => {
         { senderId: myId, recieverId: selectedUser },
         { senderId: selectedUser, recieverId: myId },
       ],
-    });
+    }).sort({ createdAt: 1 });
 
-    await Message.updateMany({
-      senderId: selectedUser,
-      recieverId: myId,
-      seen: true,
-    });
+    // mark messages as seen
+    await Message.updateMany(
+      {
+        senderId: selectedUser,
+        recieverId: myId,
+        seen: false,
+      },
+      { $set: { seen: true } }
+    );
 
-    return res.json({ success: true, messages });
+    return res.status(200).json({
+      success: true,
+      messages,
+    });
   } catch (error) {
-    console.log(error.message);
-    return res.json({
+    console.error(error.message);
+    return res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Failed to fetch messages",
     });
   }
 };
 
+/* ================= MARK MESSAGE AS SEEN ================= */
 export const markMessageAsSeen = async (req, res) => {
   try {
     const { id } = req.params;
+
     await Message.findByIdAndUpdate(id, { seen: true });
 
-    return res.json({
-      success: true,
-    });
+    return res.status(200).json({ success: true });
   } catch (error) {
-    console.log(error.message);
-    return res.json({
+    console.error(error.message);
+    return res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Failed to update message",
     });
   }
 };
 
+/* ================= SEND MESSAGE ================= */
 export const sendMessage = async (req, res) => {
   try {
-    const { text, message } = req.body;
+    const { text, image } = req.body;
     const recieverId = req.params.id;
     const senderId = req.user._id;
 
-    let imageUrl;
-    if (imageUrl) {
-      const uploadResponse = await cloudinary.uploader.upload();
-      imageUrl = uploadResponse.secure_url;
+    let imageUrl = null;
+
+    if (image) {
+      const upload = await cloudinary.uploader.upload(image);
+      imageUrl = upload.secure_url;
     }
 
     const newMessage = await Message.create({
       senderId,
       recieverId,
-      text,
+      text: text || "",
       image: imageUrl,
+      seen: false,
     });
 
+    // emit socket event if receiver is online
     const recieverSocketId = userSocketMap[recieverId];
-    if (recieverId) {
+    if (recieverSocketId) {
       io.to(recieverSocketId).emit("newMessage", newMessage);
     }
 
-    return res.json({ success: true, newMessage });
+    return res.status(201).json({
+      success: true,
+      newMessage,
+    });
   } catch (error) {
-    return res.json({
+    console.error(error.message);
+    return res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Failed to send message",
     });
   }
 };

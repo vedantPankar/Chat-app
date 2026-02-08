@@ -1,133 +1,203 @@
-import React, { useEffect, useRef } from "react";
-import assets, { messagesDummyData } from "../assets/assets";
+import React, { useContext, useEffect, useRef, useState } from "react";
+import assets from "../assets/assets";
 import { formatMessageTime } from "../lib/utils";
+import { ChatContext } from "../../context/ChatContext";
+import { AuthContext } from "../../context/AuthContext";
+import toast from "react-hot-toast";
+import imageCompression from "browser-image-compression";
 
-const ChatContainer = ({ selectedUser, setSelectedUser }) => {
-  const scrollEnd = useRef();
+const ChatContainer = () => {
+  const { messages, selectedUser, setSelectedUser, sendMessage, getMessages } =
+    useContext(ChatContext);
 
+  const { authUser, onlineUsers } = useContext(AuthContext);
+
+  const scrollRef = useRef(null);
+
+  const [input, setInput] = useState("");
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [uploading, setUploading] = useState(false);
+
+  /* ================= LOAD MESSAGES ================= */
   useEffect(() => {
-    if (scrollEnd.current) {
-      scrollEnd.current.scrollIntoView({ behavior: "smooth", block: "end" });
+    if (selectedUser) {
+      getMessages(selectedUser._id);
     }
-  }, [selectedUser, messagesDummyData.length]);
+  }, [selectedUser, getMessages]);
 
-  return selectedUser ? (
-    <div className="flex h-full max-h-full flex-col overflow-hidden backdrop-blur-lg">
-      {/* header */}
+  /* ================= AUTO SCROLL ================= */
+  useEffect(() => {
+    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages.length]);
+
+  /* ================= SELECT IMAGE ================= */
+  const handleSelectImage = async (e) => {
+    const file = e.target.files[0];
+    if (!file || !file.type.startsWith("image/")) {
+      toast.error("Please select an image");
+      return;
+    }
+
+    setSelectedImage(file);
+    setImagePreview(URL.createObjectURL(file));
+  };
+
+  /* ================= SEND MESSAGE ================= */
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    if (!selectedUser) return;
+
+    // Send image if exists
+    if (selectedImage) {
+      setUploading(true);
+
+      try {
+        const compressed = await imageCompression(selectedImage, {
+          maxSizeMB: 0.4,
+          maxWidthOrHeight: 1280,
+          useWebWorker: true,
+        });
+
+        const reader = new FileReader();
+        reader.readAsDataURL(compressed);
+
+        reader.onloadend = async () => {
+          await sendMessage({ image: reader.result });
+          cleanupImage();
+        };
+      } catch {
+        toast.error("Image upload failed");
+        cleanupImage();
+      }
+
+      return;
+    }
+
+    // Send text
+    if (!input.trim()) return;
+    await sendMessage({ text: input.trim() });
+    setInput("");
+  };
+
+  const cleanupImage = () => {
+    setUploading(false);
+    setSelectedImage(null);
+    setImagePreview(null);
+    setInput("");
+  };
+
+  /* ================= EMPTY STATE ================= */
+  if (!selectedUser) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-2 bg-white/5 backdrop-blur-lg">
+        <img src={assets.logo_icon} alt="" className="max-w-16" />
+        <p className="text-lg font-medium text-white">Chat anytime, anywhere</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-full flex-col overflow-hidden backdrop-blur-lg">
+      {/* ================= HEADER ================= */}
       <div className="mx-3 flex items-center gap-3 border-b border-stone-500 py-3">
         <img
-          src={assets.profile_martin}
-          alt=""
+          src={selectedUser.profilePic || assets.avatar_icon}
+          alt="avatar"
           className="h-8 w-8 rounded-full"
         />
         <p className="flex flex-1 items-center gap-2 text-lg text-white">
-          Martin Johnson
-          <span className="h-2 w-2 rounded-full bg-green-500"></span>
+          {selectedUser.fullName}
+          {onlineUsers.includes(selectedUser._id) && (
+            <span className="h-2 w-2 rounded-full bg-green-500" />
+          )}
         </p>
         <img
           onClick={() => setSelectedUser(null)}
           src={assets.arrow_icon}
-          alt=""
-          className="max-w-7 md:hidden"
+          alt="back"
+          className="max-w-7 cursor-pointer md:hidden"
         />
-        <img src={assets.help_icon} alt="" className="max-w-5 max-md:hidden" />
       </div>
 
-      {/* chat area */}
-      <div className="flex flex-1 flex-col overflow-y-auto p-3 pb-4">
-        {messagesDummyData.map((msg, index) => {
-          const isMe = msg.senderId === "680f50e4f10f3cd28382ecf9";
+      {/* ================= CHAT AREA ================= */}
+      <div className="flex-1 overflow-y-auto p-3 pb-4 min-h-0">
+        {messages.map((msg) => {
+          const isMe = msg.senderId === authUser._id;
 
           return (
             <div
-              key={index}
-              className={`mb-2 flex items-end gap-2 ${
+              key={msg._id}
+              className={`mb-2 flex gap-2 ${
                 isMe ? "justify-end" : "justify-start"
               }`}
             >
-              {/* Left side (received) avatar + message */}
-              {!isMe && (
-                <>
-                  <div className="text-center text-xs">
-                    <img
-                      src={assets.profile_martin}
-                      alt=""
-                      className="w-7 rounded-full"
-                    />
-                    <p className="text-gray-500">
-                      {formatMessageTime(msg.createdAt)}
-                    </p>
-                  </div>
-                  {msg.image ? (
-                    <img
-                      src={msg.image}
-                      alt=""
-                      className="mb-8 max-w-57.5 overflow-hidden rounded-lg border border-gray-700"
-                    />
-                  ) : (
-                    <p className="mb-8 max-w-50 break-all rounded-lg bg-violet-500/30 p-2 text-white md:text-sm">
-                      {msg.text}
-                    </p>
-                  )}
-                </>
-              )}
-
-              {/* Right side (my) message + avatar */}
-              {isMe && (
-                <>
-                  {msg.image ? (
-                    <img
-                      src={msg.image}
-                      alt=""
-                      className="mb-8 max-w-57.5 overflow-hidden rounded-lg border border-gray-700"
-                    />
-                  ) : (
-                    <p className="mb-8 max-w-50 break-all rounded-lg bg-violet-500/30 p-2 text-white md:text-sm">
-                      {msg.text}
-                    </p>
-                  )}
-                  <div className="text-center text-xs">
-                    <img
-                      src={assets.avatar_icon}
-                      alt=""
-                      className="w-7 rounded-full"
-                    />
-                    <p className="text-gray-500">
-                      {formatMessageTime(msg.createdAt)}
-                    </p>
-                  </div>
-                </>
+              {msg.image ? (
+                <img
+                  src={msg.image}
+                  className="max-w-56 rounded-lg border border-gray-700"
+                />
+              ) : (
+                <p className="bg-violet-500/30 p-2 rounded-lg text-white">
+                  {msg.text}
+                </p>
               )}
             </div>
           );
         })}
-        <div ref={scrollEnd}></div>
+        <div ref={scrollRef} />
       </div>
 
-      {/* bottom area */}
-      <div className="flex items-center gap-3 p-3">
-        <div className="flex flex-1 items-center rounded-full bg-gray-100/12 px-3">
-          <input
-            type="text"
-            placeholder="Send a message..."
-            className="flex-1 text-sm p-3 border-none rounded-lg outline-none text-white placeholder-gray-400"
-          />
-          <input type="file" id="image" accept="image/*" hidden />
-          <label htmlFor="image">
+      {/* ================= INPUT ================= */}
+      <form
+        onSubmit={handleSendMessage}
+        className="p-3 border-t border-stone-600"
+      >
+        {/* IMAGE PREVIEW INSIDE INPUT */}
+        {imagePreview && (
+          <div className="mb-2 relative w-24">
             <img
-              src={assets.gallery_icon}
-              alt=""
-              className="w-5 mr-2 cursor-pointer"
+              src={imagePreview}
+              className="rounded-lg border border-gray-600"
             />
-          </label>
+            <button
+              type="button"
+              onClick={cleanupImage}
+              className="absolute -top-2 -right-2 bg-black text-white text-xs px-2 rounded-full"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        <div className="flex items-center gap-3">
+          <div className="flex flex-1 items-center rounded-full bg-gray-100/12 px-3">
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Send a message..."
+              className="flex-1 bg-transparent p-3 text-sm text-white outline-none"
+              disabled={uploading}
+            />
+
+            <input
+              type="file"
+              id="image"
+              accept="image/*"
+              hidden
+              onChange={handleSelectImage}
+            />
+
+            <label htmlFor="image">
+              <img src={assets.gallery_icon} className="w-5 cursor-pointer" />
+            </label>
+          </div>
+
+          <button type="submit" disabled={uploading}>
+            <img src={assets.send_button} className="w-7 cursor-pointer" />
+          </button>
         </div>
-        <img src={assets.send_button} alt="" className="w-7 cursor-pointer" />
-      </div>
-    </div>
-  ) : (
-    <div className="flex flex-col items-center justify-center gap-2 flex-1 min-w-0 min-h-full bg-white/5 backdrop-blur-lg">
-      <img src={assets.logo_icon} alt="" className="max-w-16" />
-      <p className="text-lg font-medium text-white">Chat anytime, anywhere</p>
+      </form>
     </div>
   );
 };
