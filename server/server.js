@@ -30,7 +30,7 @@ io.use((socket, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     socket.userId = decoded.userId;
     next();
-  } catch (err) {
+  } catch (error) {
     next(new Error("Unauthorized"));
   }
 });
@@ -41,6 +41,7 @@ io.on("connection", (socket) => {
   if (!userSocketMap.has(userId)) {
     userSocketMap.set(userId, new Set());
   }
+
   userSocketMap.get(userId).add(socket.id);
 
   io.emit("getOnlineUsers", Array.from(userSocketMap.keys()));
@@ -75,24 +76,20 @@ app.get("/api/status", (req, res) => {
 app.use("/api/auth", userRouter);
 app.use("/api/messages", messageRouter);
 
-/* ================= START SERVER ================= */
+/* ================= START SERVER (RENDER) ================= */
 const PORT = process.env.PORT || 3000;
 
 const startServer = async () => {
-  await connectDB();
-  server.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-  });
+  try {
+    await connectDB();
+    server.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error("Failed to start server:", error);
+  }
 };
 
-if (process.env.NODE_ENV !== "production") {
-  startServer();
-}
-
-/* ================= GRACEFUL SHUTDOWN ================= */
-process.on("SIGINT", async () => {
-  console.log("Shutting down server...");
-  server.close(() => process.exit(0));
-});
+startServer();
 
 export default server;

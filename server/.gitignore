@@ -15,3 +15,5 @@ temp/
 .idea/
 *.swp
 *.swo
+.env
+.env.*
