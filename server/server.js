@@ -85,10 +85,14 @@ const startServer = async () => {
   });
 };
 
-startServer();
+if (process.env.NODE_ENV !== "production") {
+  startServer();
+}
 
 /* ================= GRACEFUL SHUTDOWN ================= */
 process.on("SIGINT", async () => {
   console.log("Shutting down server...");
   server.close(() => process.exit(0));
 });
+
+export default server;

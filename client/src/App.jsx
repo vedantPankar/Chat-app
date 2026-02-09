@@ -13,7 +13,7 @@ const App = () => {
   if (authUser === undefined) return null;
 
   return (
-    <div className="min-h-screen bg-[#1a1a2e] bg-[url('./src/assets/bgImage.svg')] bg-cover bg-center">
+    <div className="min-h-screen bg-[#1a1a2e] bg-[url('/bgImage.svg')] bg-cover bg-center">
       <Toaster position="top-right" />
 
       <Routes>
