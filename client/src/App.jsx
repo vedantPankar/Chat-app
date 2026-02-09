@@ -8,25 +8,18 @@ import { AuthContext } from "../context/AuthContext";
 
 const App = () => {
   const { authUser } = useContext(AuthContext);
-
-  // Prevent redirect flicker on refresh
-  if (authUser === undefined) return null;
-
   return (
-    <div className="min-h-screen bg-[#1a1a2e] bg-[url('/bgImage.svg')] bg-cover bg-center">
-      <Toaster position="top-right" />
-
+    <div className="bg-[url('/bgImage.svg')] bg-contain">
+      <Toaster />
       <Routes>
         <Route
           path="/"
           element={authUser ? <HomePage /> : <Navigate to="/login" />}
         />
-
         <Route
           path="/login"
           element={!authUser ? <LoginPage /> : <Navigate to="/" />}
         />
-
         <Route
           path="/profile"
           element={authUser ? <ProfilePage /> : <Navigate to="/login" />}
