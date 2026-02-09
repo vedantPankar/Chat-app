@@ -43,7 +43,7 @@ const ChatContainer = () => {
     if (selectedUser) {
       getMessages(selectedUser._id);
     }
-  }, [selectedUser]);
+  }, [selectedUser, messages]);
 
   useEffect(() => {
     if (scrollEnd.current && messages) {
